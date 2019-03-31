@@ -17,3 +17,10 @@ from sklearn.preprocessing import LabelEncoder,OneHotEncoder
 from keras import backend as K
 
 
+train2 = pd.read_csv("fashion-mnist_train.csv").values
+train2 = train2[:, 1:]
+train2X = train2.reshape(train2.shape[0],1,28,28).astype( 'float32' )
+
+train = pd.read_csv("result_imuzcenter.csv").values
+train = train[:-124774, 1:-2]
+trainX = train.reshape(train.shape[0],2,3,1).astype( 'float32' )
