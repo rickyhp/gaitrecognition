@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-whitegrid')
-
+import os
 import glob
 import errno
 import tensorflow as tf
@@ -89,9 +89,42 @@ Y = result[['Subject']]
 X = X[X.Act=='Walk1']
 X.groupby('Subject').count().min()
 
+curSubject = ''
+path = "F:\\CODE\\gaitrecognition\\"
+WINDOW = 20
+r = 0
+i = 0
+j = 1
+X1 = pd.DataFrame(columns=['Gx','Gy','Gz','Ax','Ay','Az'])
+
+for index, row in X.iterrows():
+    i += 1
+    print(i, ' : ',row['Subject'], row['Gx'], row['Gy'], row['Gz'], row['Ax'], row['Ay'], row['Az'])
+    if(curSubject != row['Subject']):        
+        curSubject = row['Subject']                
+        X1 = X1.append({'Gx':row['Gx'],'Gy':row['Gy'],
+                        'Gz':row['Gz'], 'Ax':row['Ax'], 'Ay':row['Ay'],
+                        'Az':row['Az']}, ignore_index='True')
+        try:
+            os.mkdir(path + "dataset\\" + row['Subject'])
+        except:
+            print('folder exists, skipping')                
+    else:
+        X1 = X1.append({'Gx':row['Gx'],'Gy':row['Gy'],
+                        'Gz':row['Gz'], 'Ax':row['Ax'], 'Ay':row['Ay'],
+                        'Az':row['Az']}, ignore_index='True')
+
+    if(i % WINDOW == 0):            
+            X1.to_csv(path + "dataset\\" + row['Subject'] + "\\" + row['Subject'] + "." + str(j) + ".csv")
+            j += 1
+            X1 = X1[0:0]
+            print('===== saved to csv =====')
+
+
+
 d = {'Subject':[]}
 X1 = pd.DataFrame(data=d)
-curSubject = ''
+
 r = 0
 for index, row in X.iterrows():
     print(r, ' : ',row['Subject'], row['Gx'], row['Gy'], row['Gz'], row['Ax'], row['Ay'], row['Az'])
