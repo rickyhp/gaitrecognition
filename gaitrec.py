@@ -8,12 +8,14 @@ Created on Sun Jan 27 01:54:08 2019
 #%matplotlib inline
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-plt.style.use('seaborn-whitegrid')
+#import matplotlib.pyplot as plt
+#plt.style.use('seaborn-whitegrid')
 import os
 import glob
 import errno
 import tensorflow as tf
+from scipy.stats import kurtosis, skew
+import math
 
 ## OU-InertialGaitData
 ou_isir_data = '/Users/rickyputra/CODE/OU-IneritialGaitData/ManualExtractionData/Android/*.csv'
@@ -33,6 +35,8 @@ ou_isir_imuzright_out = '/Users/rickyputra/CODE/OU-IneritialGaitData/ManualExtra
 # Remove first and second rows, and create new files in out subdir
 OU_ISIR_DATA = ou_isir_imuzright
 OU_ISIR_DATA_OUT = ou_isir_imuzright_out
+
+WINDOW_LENGTH = 100
 
 files = glob.glob(OU_ISIR_DATA)
 for name in files:
@@ -64,6 +68,78 @@ def process_file(name):
         print('Error : ' + exc.errno)
         if exc.errno != errno.EISDIR:
             raise
+            
+# features engineering
+def get_summary(data, start, end):
+    # print('In summary: ', data.shape)
+    data_window = data[start:end]
+    acf = np.correlate(data_window, data_window, mode='full')
+    acv = np.cov(data_window.T, data_window.T)
+    sq_err = (data_window - np.mean(data_window)) ** 2
+    return [
+        np.mean(data_window),
+        np.std(data_window),
+        np.var(data_window),
+        np.min(data_window),
+        np.max(data_window),
+        np.mean(acf),
+        np.std(acf),
+        np.mean(acv),
+        np.std(acv),
+        skew(data_window),
+        kurtosis(data_window),
+        math.sqrt(np.mean(sq_err))
+    ]
+
+
+def get_magnitude(data):
+    x_2 = data[:, 0] * data[:, 0]
+    y_2 = data[:, 1] * data[:, 1]
+    z_2 = data[:, 2] * data[:, 2]
+    m_2 = x_2 + y_2 + z_2
+    m = np.sqrt(m_2)
+    return np.reshape(m, (m.shape[0], 1))
+
+
+def get_window(data):
+    start = 0
+    size = data.shape[0]
+    while start < size:
+        end = start + WINDOW_LENGTH
+        yield start, end
+        start += int(WINDOW_LENGTH // 2)  # 50% overlap, hence divide by two
+
+
+def get_features(raw_data):
+    data_parts = [None] * 2
+    data_parts[0], data_parts[1] = raw_data[:, :3], raw_data[:, 3:]
+    final_features = None
+    for data in data_parts:
+        data = np.concatenate((data, get_magnitude(data)), axis=1)
+        features = None
+        for (start, end) in get_window(data):
+            window_features = []
+            for j in range(data.shape[1]):
+                window_features += get_summary(data[:, j], start, end)
+            if features is None:
+                features = np.array(window_features)
+            else:
+                features = np.vstack((features, np.array(window_features)))
+        if final_features is None:
+            final_features = np.array(features)
+        else:
+            final_features = np.hstack((final_features, features))
+
+    if (len(final_features.shape)) < 2:
+        final_features = final_features.reshape(1, -1)
+    return final_features
+
+def data_normalize(data_temp):
+    data_temp2=np.array(data_temp.T, dtype=np.float32)
+    data_temp2 -=np.mean(data_temp2,axis=0) # mean in column
+    data_temp2 /=np.std(data_temp2,axis=0) # std in column
+    data_temp=data_temp2.T
+    return data_temp
 
 #files = glob.glob(ou_isir_data_out_files)
 files = glob.glob(OU_ISIR_DATA_OUT + '*.csv')
@@ -78,53 +154,61 @@ result.to_csv('result_imuzright.csv')
 
 #
 result = pd.read_csv('result_imuzcenter.csv')
+#result = pd.read_csv('result_imuzcenter.csv')
+#result = result.append(pd.read_csv('result_imuzleft.csv'))
+#result = result.append(pd.read_csv('result_imuzright.csv'))
 
 # data understanding
-result.groupby('Subject').count().min()
-result.groupby('Subject').count().max()
+#result.groupby('Subject').count().min()
+#result.groupby('Subject').count().max()
 
 X = result[['Subject','Gx','Gy','Gz','Ax','Ay','Az','Act']]
+
 Y = result[['Subject']]
 
-X = X[X.Act=='Walk1']
-X.groupby('Subject').count().min()
+X = X[X['Act'].isin(['Walk1'])]
+
+data = X[['Gx','Gy','Gz','Ax','Ay','Az']].values
+
+get_summary(data[:,1],1,100)
+
+#X.groupby('Subject').count().min()
 
 curSubject = ''
 path = "F:\\CODE\\gaitrecognition\\"
-WINDOW = 20
-r = 0
-i = 0
-j = 1
-X1 = pd.DataFrame(columns=['Gx','Gy','Gz','Ax','Ay','Az'])
-
-for index, row in X.iterrows():
-    i += 1
-    print(i, ' : ',row['Subject'], row['Gx'], row['Gy'], row['Gz'], row['Ax'], row['Ay'], row['Az'])
-    if(curSubject != row['Subject']):        
-        curSubject = row['Subject']                
-        X1 = X1.append({'Gx':row['Gx'],'Gy':row['Gy'],
-                        'Gz':row['Gz'], 'Ax':row['Ax'], 'Ay':row['Ay'],
-                        'Az':row['Az']}, ignore_index='True')
-        try:
-            os.mkdir(path + "dataset\\" + row['Subject'])
-        except:
-            print('folder exists, skipping')                
-    else:
-        X1 = X1.append({'Gx':row['Gx'],'Gy':row['Gy'],
-                        'Gz':row['Gz'], 'Ax':row['Ax'], 'Ay':row['Ay'],
-                        'Az':row['Az']}, ignore_index='True')
-
-    if(i % WINDOW == 0):            
-            X1.to_csv(path + "dataset\\" + row['Subject'] + "\\" + row['Subject'] + "." + str(j) + ".csv")
-            j += 1
-            X1 = X1[0:0]
-            print('===== saved to csv =====')
+#WINDOW = 20
+#r = 0
+#i = 0
+#j = 1
+#X1 = pd.DataFrame(columns=['Gx','Gy','Gz','Ax','Ay','Az'])
+#
+#for index, row in X.iterrows():
+#    i += 1
+#    print(i, ' : ',row['Subject'], row['Gx'], row['Gy'], row['Gz'], row['Ax'], row['Ay'], row['Az'])
+#    if(curSubject != row['Subject']):        
+#        curSubject = row['Subject']                
+#        X1 = X1.append({'Gx':row['Gx'],'Gy':row['Gy'],
+#                        'Gz':row['Gz'], 'Ax':row['Ax'], 'Ay':row['Ay'],
+#                        'Az':row['Az']}, ignore_index='True')
+#        try:
+#            os.mkdir(path + "dataset\\" + row['Subject'])
+#        except:
+#            print('folder exists, skipping')                
+#    else:
+#        X1 = X1.append({'Gx':row['Gx'],'Gy':row['Gy'],
+#                        'Gz':row['Gz'], 'Ax':row['Ax'], 'Ay':row['Ay'],
+#                        'Az':row['Az']}, ignore_index='True')
+#
+#    if(i % WINDOW == 0):            
+#            X1.to_csv(path + "dataset\\" + row['Subject'] + "\\" + row['Subject'] + "." + str(j) + ".csv")
+#            j += 1
+#            X1 = X1[0:0]
+#            print('===== saved to csv =====')
 
 
 
 d = {'Subject':[]}
 X1 = pd.DataFrame(data=d)
-
 r = 0
 for index, row in X.iterrows():
     print(r, ' : ',row['Subject'], row['Gx'], row['Gy'], row['Gz'], row['Ax'], row['Ay'], row['Az'])
@@ -144,102 +228,31 @@ for index, row in X.iterrows():
         X1.loc[r-1,'Ay'+str(i)] = row['Ay']
         X1.loc[r-1,'Az'+str(i)] = row['Az']
 
-# CNN
-####################Set parameters###############################
-def weight_variable(shape):
-    initial = tf.truncated_normal(shape, stddev=0.1)
-    return tf.Variable(initial)
+X1.to_csv(path + "dataset\\Walk1_C.csv")
 
-def bias_variable(shape):
-    initial = tf.constant(0.1, shape=shape)
-    return tf.Variable(initial)
+X1 = pd.read_csv("Walk1_C.csv")
+X1_arr = X1.values
 
-def conv2d(x, W):
-    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+def DA_Jitter(X, sigma=0.05):
+    myNoise = np.random.normal(loc=0, scale=sigma, size=X.shape)
+    return X+myNoise
+ 
+def DA_Scaling(X, sigma=0.1):
+    scalingFactor = np.random.normal(loc=1.0, scale=sigma, size=(1,X.shape[1]))
+    myNoise = np.matmul(np.ones((X.shape[0],1)), scalingFactor)
+    return X*myNoise
 
-def max_pool_2x2(x):
-    return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
-                          strides=[1, 2, 2, 1], padding='SAME')
+X12 = X1_arr
+# generate gaussian noise sequences for each subject
+for i in range(1,10):
+    X2_arr = X1_arr
+    X2_arr[:,2:] = DA_Jitter(X2_arr[:,2:])
+    X12 = np.concatenate((X12, X2_arr))
 
-def next_batch(num, data, labels):
-    '''
-    Return a total of `num` random samples and labels. 
-    '''
-    idx = np.arange(0 , len(data))
-    np.random.shuffle(idx)
-    idx = idx[:num]
-    data_shuffle = [data[ i] for i in idx]
-    labels_shuffle = [labels[ i] for i in idx]
+for i in range(1,10):
+    X2_arr = X1_arr
+    X2_arr[:,2:] = DA_Scaling(X2_arr[:,2:])
+    X12 = np.concatenate((X12, X2_arr))
 
-    return np.asarray(data_shuffle), np.asarray(labels_shuffle)
-
-
-tf.reset_default_graph()
-x = tf.placeholder(tf.float32, [None, 128*6])  
-x_image = tf.reshape(x, [-1,16,8,6]) #reshape
-sess = tf.InteractiveSession()
-
-"""
-# first layer
-"""
-W_conv1 = weight_variable([5, 5, 6, 32])  
-b_conv1 = bias_variable([32])
-h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-h_pool1 = max_pool_2x2(h_conv1)
-
-"""
-# second layer
-"""
-W_conv2 = weight_variable([5, 5, 32, 64]) 
-b_conv2 = bias_variable([64])
-h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-h_pool2 = max_pool_2x2(h_conv2)
-
-
-"""
-# third layer, the fully connected layer with an input dimension of 4*2*64 and an output dimension of 1024
-"""
-W_fc1 = weight_variable([4*2*64, 1024])  
-b_fc1 = bias_variable([1024])
-h_pool2_flat = tf.reshape(h_pool2, [-1, 4*2*64]) 
-h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
-keep_prob = tf.placeholder(tf.float32) 
-h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
-"""
-# fourth layer，with an input dimension of 1024 and an output dimension of 21，corresponding to 21 categories
-"""
-W_fc2 = weight_variable([1024, 21])
-b_fc2 = bias_variable([21])
-y_conv=tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2) #Use softmax as a multi-class activation function
-y_ = tf.placeholder(tf.float32, [None, 21])
-
-cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv), reduction_indices=[1])) # Loss function，cross entropy
-tf.summary.scalar('loss', cross_entropy)
-train_optimizer = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy) # Use Adam optimizer
-correct_prediction = tf.equal(tf.argmax(y_conv,1), tf.argmax(y_,1)) 
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-tf.summary.scalar('accuracy', accuracy)
-merged = tf.summary.merge_all()
-log_dir='/Users/rickyputra/CODE/gaitrec/tensorboard/'  # Use tensorboard
-train_writer = tf.summary.FileWriter(log_dir + 'train', sess.graph)
-test_writer = tf.summary.FileWriter(log_dir+'test/')
-sess.run(tf.initialize_all_variables())  # Variable initialization
-optimal_accuracy = 0.0
-#train
-for i in range(10000):  
-    batch_x,batch_y = next_batch(50,train_np,ytrain_label)  
-    if i%100 == 0:
-        loss,test_accuracy,test_summary=sess.run([cross_entropy,accuracy,merged],feed_dict={
-            x:test_np, y_: ytest_label, keep_prob: 1.0})
-        test_writer.add_summary(test_summary, i)
-        print("step %d, test accuracy: %g, loss: %g"%(i, test_accuracy,loss))
-        optimal_accuracy = max(optimal_accuracy, test_accuracy)
-    summary_, _ = sess.run([merged,train_optimizer],feed_dict={x: batch_x, y_: batch_y, keep_prob: 0.5})   
-    train_writer.add_summary(summary_, i)
-train_writer.close()
-test_writer.close()
-
-print("best test accuracy: %g"%(optimal_accuracy))
-print("final test accuracy %g"%accuracy.eval(feed_dict={x: test_np, y_: ytest_label, keep_prob: 1.0}))
-
-
+X12 = pd.DataFrame(X12)
+X12.to_csv("Walk1_C_noise.csv")
