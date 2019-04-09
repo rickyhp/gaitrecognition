@@ -242,14 +242,25 @@ def DA_Scaling(X, sigma=0.1):
     myNoise = np.matmul(np.ones((X.shape[0],1)), scalingFactor)
     return X*myNoise
 
+def GenerateRandomCurves(X, sigma=0.2, knot=4):
+    xx = (np.ones((X.shape[1],1))*(np.arange(0,X.shape[0], (X.shape[0]-1)/(knot+1)))).transpose()
+    yy = np.random.normal(loc=1.0, scale=sigma, size=(knot+2, X.shape[1]))
+    x_range = np.arange(X.shape[0])
+    cs_x = CubicSpline(xx[:,0], yy[:,0])
+    cs_y = CubicSpline(xx[:,1], yy[:,1])
+    cs_z = CubicSpline(xx[:,2], yy[:,2])
+    return np.array([cs_x(x_range),cs_y(x_range),cs_z(x_range)]).transpose()
+
 X12 = X1_arr
+
+num_of_records = 10
 # generate gaussian noise sequences for each subject
-for i in range(1,10):
+for i in range(1,num_of_records):
     X2_arr = X1_arr
     X2_arr[:,2:] = DA_Jitter(X2_arr[:,2:])
     X12 = np.concatenate((X12, X2_arr))
 
-for i in range(1,10):
+for i in range(1,num_of_records):
     X2_arr = X1_arr
     X2_arr[:,2:] = DA_Scaling(X2_arr[:,2:])
     X12 = np.concatenate((X12, X2_arr))
