@@ -248,11 +248,8 @@ def DA_Scaling(X, sigma=0.1):
 
 def GenerateRandomCurves(X, sigma=0.2, knot=5):
     xx = (np.ones((X.shape[1],1))*(np.arange(0,X.shape[0], (X.shape[0]-1)/(knot+1)))).transpose()
-    print('xx : ',xx)
     yy = np.random.normal(loc=1.0, scale=sigma, size=(knot+2, X.shape[1]))
     x_range = np.arange(X.shape[0])
-    print('xx[:,0] : ', xx[:,0])
-    print('yy[:,0] : ', yy[:,0])
     cs_x = CubicSpline(xx[:,0], yy[:,0])
     cs_y = CubicSpline(xx[:,1], yy[:,1])
     cs_z = CubicSpline(xx[:,2], yy[:,2])
@@ -295,10 +292,11 @@ for i in range(1,num_of_records):
     X12 = np.concatenate((X12, X2_arr))
 
 # 3) Magnitude Wrap
-#for i in range(1,num_of_records):
-#    X2_arr = X1_arr
-#    X2_arr[:,2:] = DA_MagWarp(X2_arr[:,2:])
-#    X12 = np.concatenate((X12, X2_arr))
+for i in range(1,num_of_records):
+    X2_arr = X1_arr
+    for j in range(1,7107):
+        (X2_arr[:,1+j:])[:,:3] = DA_MagWarp((X2_arr[:,1+j:])[:,:3])
+    X12 = np.concatenate((X12, X2_arr))
 
 # 3) Rotation
 for i in range(1,num_of_records):
