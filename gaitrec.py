@@ -16,6 +16,8 @@ import errno
 import tensorflow as tf
 from scipy.stats import kurtosis, skew
 import math
+from scipy.interpolate import CubicSpline      # for warping
+from transforms3d.axangles import axangle2mat  # for rotation
 
 ## OU-InertialGaitData
 ou_isir_data = '/Users/rickyputra/CODE/OU-IneritialGaitData/ManualExtractionData/Android/*.csv'
@@ -230,7 +232,9 @@ for index, row in X.iterrows():
 
 X1.to_csv(path + "dataset\\Walk1_C.csv")
 
-X1 = pd.read_csv("Walk1_C.csv")
+my_data = np.load('/Users/rickyputra/Downloads/X_sample.npy')
+
+X1 = pd.read_csv("dataset/Walk1_C.csv")
 X1_arr = X1.values
 
 def DA_Jitter(X, sigma=0.05):
@@ -242,28 +246,67 @@ def DA_Scaling(X, sigma=0.1):
     myNoise = np.matmul(np.ones((X.shape[0],1)), scalingFactor)
     return X*myNoise
 
-def GenerateRandomCurves(X, sigma=0.2, knot=4):
+def GenerateRandomCurves(X, sigma=0.2, knot=5):
     xx = (np.ones((X.shape[1],1))*(np.arange(0,X.shape[0], (X.shape[0]-1)/(knot+1)))).transpose()
+    print('xx : ',xx)
     yy = np.random.normal(loc=1.0, scale=sigma, size=(knot+2, X.shape[1]))
     x_range = np.arange(X.shape[0])
+    print('xx[:,0] : ', xx[:,0])
+    print('yy[:,0] : ', yy[:,0])
     cs_x = CubicSpline(xx[:,0], yy[:,0])
     cs_y = CubicSpline(xx[:,1], yy[:,1])
     cs_z = CubicSpline(xx[:,2], yy[:,2])
     return np.array([cs_x(x_range),cs_y(x_range),cs_z(x_range)]).transpose()
 
+def DA_MagWarp(X, sigma=0.2):
+    return X * GenerateRandomCurves(X, sigma)
+
+def DA_Rotation(X):
+    axis = np.random.uniform(low=-1, high=1, size=X.shape[1])
+    angle = np.random.uniform(low=-np.pi, high=np.pi)
+    return np.matmul(X.astype(float) , axangle2mat(axis,angle))
+
+
 X12 = X1_arr
 
 num_of_records = 10
+sigma = 0.2
+knot = 4
+
+#print(DA_Jitter(X12[:,2:]))
+#
+#print(DA_MagWarp(X12[:,2:]))
+#
+#print(DA_Rotation((X12[:,2:])[:,:3]))
+
+
 # generate gaussian noise sequences for each subject
+
+# 1) Jitter
 for i in range(1,num_of_records):
     X2_arr = X1_arr
     X2_arr[:,2:] = DA_Jitter(X2_arr[:,2:])
     X12 = np.concatenate((X12, X2_arr))
 
+# 2) Scaling
 for i in range(1,num_of_records):
     X2_arr = X1_arr
     X2_arr[:,2:] = DA_Scaling(X2_arr[:,2:])
     X12 = np.concatenate((X12, X2_arr))
+
+# 3) Magnitude Wrap
+#for i in range(1,num_of_records):
+#    X2_arr = X1_arr
+#    X2_arr[:,2:] = DA_MagWarp(X2_arr[:,2:])
+#    X12 = np.concatenate((X12, X2_arr))
+
+# 3) Rotation
+for i in range(1,num_of_records):
+    X2_arr = X1_arr
+    for j in range(1,7107):
+        (X2_arr[:,1+j:])[:,:3] = DA_Rotation((X2_arr[:,1+j:])[:,:3])
+    X12 = np.concatenate((X12, X2_arr))
+
 
 X12 = pd.DataFrame(X12)
 X12.to_csv("Walk1_C_noise.csv")
