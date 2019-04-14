@@ -155,7 +155,7 @@ result = pd.concat(df, axis=0, sort=False)
 result.to_csv('result_imuzright.csv')
 
 #
-result = pd.read_csv('result_imuzcenter.csv')
+result = pd.read_csv('dataset/result_imuzcenter.csv')
 #result = pd.read_csv('result_imuzcenter.csv')
 #result = result.append(pd.read_csv('result_imuzleft.csv'))
 #result = result.append(pd.read_csv('result_imuzright.csv'))
@@ -174,7 +174,7 @@ data = X[['Gx','Gy','Gz','Ax','Ay','Az']].values
 
 get_summary(data[:,1],1,100)
 
-#X.groupby('Subject').count().min()
+X.groupby('Subject').count().min()
 
 curSubject = ''
 path = "F:\\CODE\\gaitrecognition\\"
@@ -212,16 +212,17 @@ path = "F:\\CODE\\gaitrecognition\\"
 d = {'Subject':[]}
 X1 = pd.DataFrame(data=d)
 r = 0
+i = 0
 for index, row in X.iterrows():
     print(r, ' : ',row['Subject'], row['Gx'], row['Gy'], row['Gz'], row['Ax'], row['Ay'], row['Az'])
-    if(curSubject != row['Subject']):
+    if(curSubject != row['Subject'] or i == 100):        
         i = 1
         r += 1
         curSubject = row['Subject']
         X1 = X1.append({'Subject':row['Subject'],'Gx'+str(i):row['Gx'],'Gy'+str(i):row['Gy'],
                         'Gz'+str(i):row['Gz'], 'Ax'+str(i):row['Ax'], 'Ay'+str(i):row['Ay'],
                         'Az'+str(i):row['Az']},ignore_index=True)
-    else:
+    elif(i < 100):
         i += 1
         X1.loc[r-1,'Gx'+str(i)] = row['Gx']
         X1.loc[r-1,'Gy'+str(i)] = row['Gy']
@@ -230,14 +231,14 @@ for index, row in X.iterrows():
         X1.loc[r-1,'Ay'+str(i)] = row['Ay']
         X1.loc[r-1,'Az'+str(i)] = row['Az']
 
-X1.to_csv(path + "dataset\\Walk1_C.csv")
+X1 = X1.dropna()
+        
+X1.to_csv(path + "dataset\\Walk1_C_100.csv")
 
-my_data = np.load('/Users/rickyputra/Downloads/X_sample.npy')
-
-X1 = pd.read_csv("dataset/Walk1_C.csv")
+X1 = pd.read_csv("dataset\\Walk1_C.csv")
 X1_arr = X1.values
 
-def DA_Jitter(X, sigma=0.05):
+def DA_Jitter(X, sigma=0.01):
     myNoise = np.random.normal(loc=0, scale=sigma, size=X.shape)
     return X+myNoise
  
@@ -307,4 +308,4 @@ for i in range(1,num_of_records):
 
 
 X12 = pd.DataFrame(X12)
-X12.to_csv("Walk1_C_noise.csv")
+X12.to_csv("Walk1_C_100_noise.csv")
