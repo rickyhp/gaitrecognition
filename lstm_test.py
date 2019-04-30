@@ -18,6 +18,7 @@ from keras.layers import Flatten
 from keras.layers import Dropout
 from keras.layers import LSTM
 from keras.layers import ConvLSTM2D
+from keras.layers import Bidirectional
 from keras.utils import to_categorical
 from matplotlib import pyplot
 from keras.layers.convolutional import Conv2D
@@ -148,13 +149,33 @@ def evaluate_lstm_model(trainX, trainy, testX, testy):
     _, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
     return accuracy
 
-def evaluate_cnn_model(trainX, trainy, testX, testy):
+def evaluate_stackedlstm_model(trainX, trainy, testX, testy):
     verbose, epochs, batch_size = 0, 15, 64
+    n_timesteps, n_features, n_outputs = trainX.shape[1], trainX.shape[2], trainy.shape[1]
+    model = Sequential()
+    model.add(LSTM(100, return_sequences=True, input_shape=(n_timesteps,n_features)))
+    model.add(LSTM(100))
+    model.add(Dropout(0.5))
+    model.add(Dense(100, activation='relu'))
+    model.add(Dense(n_outputs, activation='softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    # fit network
+    model.fit(trainX, trainy, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    # evaluate model
+    _, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
+    return accuracy
+
+def evaluate_cnn_model(trainX, trainy, testX, testy):
+    verbose, epochs, batch_size = 0, 200, 100
     n_timesteps, n_features, n_outputs = trainX.shape[1], trainX.shape[2], trainy.shape[1]
     model = Sequential()
     model.add(Conv2D(240,(10,10), input_shape=(1,n_timesteps,n_features), activation="relu", padding="same"))
     model.add(MaxPooling2D(pool_size=(1, 2)))
     model.add(Conv2D(300,(5,5), activation="relu", padding="same"))
+    model.add(MaxPooling2D(pool_size=(1, 2)))
+    model.add(Conv2D(360,(5,5), activation="relu", padding="same"))
+    model.add(MaxPooling2D(pool_size=(1, 2)))
+    model.add(Conv2D(420,(5,5), activation="relu", padding="same"))
     model.add(MaxPooling2D(pool_size=(1, 2)))
     model.add(AveragePooling2D(pool_size=(1,5), strides=None, padding='same'))
     model.add(Dropout(0.4))
@@ -170,56 +191,61 @@ def evaluate_cnn_model(trainX, trainy, testX, testy):
     model.fit(trainX, trainy, epochs=epochs, batch_size=batch_size, verbose=verbose)
     # evaluate model
     _, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
+    
+    model.summary()
+    
     return accuracy
 
 def evaluate_cnnlstm_model(trainX, trainy, testX, testy):
-	# define model
-	verbose, epochs, batch_size = 0, 25, 64
-	n_timesteps, n_features, n_outputs = trainX.shape[1], trainX.shape[2], trainy.shape[1]
-	# reshape data into time steps of sub-sequences
-	n_steps, n_length = 4, 32
-	trainX = trainX.reshape((trainX.shape[0], n_steps, n_length, n_features))
-	testX = testX.reshape((testX.shape[0], n_steps, n_length, n_features))
-	# define model
-	model = Sequential()
-	model.add(TimeDistributed(Conv1D(filters=64, kernel_size=3, activation='relu'), input_shape=(None,n_length,n_features)))
-	model.add(TimeDistributed(Conv1D(filters=64, kernel_size=3, activation='relu')))
-	model.add(TimeDistributed(Dropout(0.5)))
-	model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
-	model.add(TimeDistributed(Flatten()))
-	model.add(LSTM(100))
-	model.add(Dropout(0.5))
-	model.add(Dense(100, activation='relu'))
-	model.add(Dense(n_outputs, activation='softmax'))
-	model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-	# fit network
-	model.fit(trainX, trainy, epochs=epochs, batch_size=batch_size, verbose=verbose)
-	# evaluate model
-	_, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
-	return accuracy
+    # define model
+    verbose, epochs, batch_size = 1, 300, 64
+    n_timesteps, n_features, n_outputs = trainX.shape[1], trainX.shape[2], trainy.shape[1]
+    # reshape data into time steps of sub-sequences
+    n_steps, n_length = 4, 32
+    trainX = trainX.reshape((trainX.shape[0], n_steps, n_length, n_features))
+    testX = testX.reshape((testX.shape[0], n_steps, n_length, n_features))
+    # define model
+    model = Sequential()
+    model.add(TimeDistributed(Conv1D(filters=64, kernel_size=3, activation='relu'), input_shape=(None,n_length,n_features)))
+    model.add(TimeDistributed(Conv1D(filters=64, kernel_size=3, activation='relu')))
+    model.add(TimeDistributed(Dropout(0.5)))
+    model.add(TimeDistributed(MaxPooling1D(pool_size=2)))
+    model.add(TimeDistributed(Flatten()))
+    #model.add(Bidirectional(LSTM(100,return_sequences=True)))
+    #model.add(Bidirectional(LSTM(100,return_sequences=True)))
+    model.add(LSTM(100))
+    model.add(Dropout(0.5))
+    model.add(Dense(100, activation='relu'))
+    model.add(Dense(n_outputs, activation='softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    # fit network
+    model.fit(trainX, trainy, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    # evaluate model
+    _, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
+    return accuracy
 
 # fit and evaluate a model
 def evaluate_convlstm_model(trainX, trainy, testX, testy):
-	# define model
-	verbose, epochs, batch_size = 0, 25, 64
-	n_timesteps, n_features, n_outputs = trainX.shape[1], trainX.shape[2], trainy.shape[1]
-	# reshape into subsequences (samples, time steps, rows, cols, channels)
-	n_steps, n_length = 4, 32
-	trainX = trainX.reshape((trainX.shape[0], n_steps, 1, n_length, n_features))
-	testX = testX.reshape((testX.shape[0], n_steps, 1, n_length, n_features))
-	# define model
-	model = Sequential()
-	model.add(ConvLSTM2D(filters=64, kernel_size=(1,3), activation='relu', input_shape=(n_steps, 1, n_length, n_features)))
-	model.add(Dropout(0.5))
-	model.add(Flatten())
-	model.add(Dense(100, activation='relu'))
-	model.add(Dense(n_outputs, activation='softmax'))
-	model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-	# fit network
-	model.fit(trainX, trainy, epochs=epochs, batch_size=batch_size, verbose=verbose)
-	# evaluate model
-	_, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
-	return accuracy
+    # define model
+    verbose, epochs, batch_size = 0, 25, 64
+    n_timesteps, n_features, n_outputs = trainX.shape[1], trainX.shape[2], trainy.shape[1]
+    # reshape into subsequences (samples, time steps, rows, cols, channels)
+    n_steps, n_length = 4, 32
+    trainX = trainX.reshape((trainX.shape[0], n_steps, 1, n_length, n_features))
+    testX = testX.reshape((testX.shape[0], n_steps, 1, n_length, n_features))
+    # define model
+    model = Sequential()
+    model.add(ConvLSTM2D(filters=64, kernel_size=(1,3), activation='relu', input_shape=(n_steps, 1, n_length, n_features)))
+    model.add(Dropout(0.5))
+    model.add(Flatten())
+    model.add(Dense(100, activation='relu'))
+    model.add(Dense(n_outputs, activation='softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    # fit network
+    model.fit(trainX, trainy, epochs=epochs, batch_size=batch_size, verbose=verbose)
+    # evaluate model
+    _, accuracy = model.evaluate(testX, testy, batch_size=batch_size, verbose=0)
+    return accuracy
 
 # summarize scores
 def summarize_results(scores):
@@ -228,17 +254,18 @@ def summarize_results(scores):
     print('Accuracy: %.3f%% (+/-%.3f)' % (m, s))
 
 # run an experiment
-def run_experiment(repeats=10):
+def run_experiment(repeats=1):
     # load data
     #trainX, trainy, testX, testy = load_dataset() # for HAR identification
     trainX, trainy, testX, testy = load_merged_dataset() # for Subject identification
     # repeat experiment
     scores = list()
     for r in range(repeats):
-        score = evaluate_lstm_model(trainX, trainy, testX, testy)
-        #score = evaluate_cnn_model(trainX, trainy, testX, testy)
+        #score = evaluate_lstm_model(trainX, trainy, testX, testy)
+        score = evaluate_cnn_model(trainX, trainy, testX, testy)
         #score = evaluate_cnnlstm_model(trainX, trainy, testX, testy)
         #score = evaluate_convlstm_model(trainX, trainy, testX, testy)
+        #score = evaluate_stackedlstm_model(trainX, trainy, testX, testy)
         score = score * 100.0
         print('>#%d: %.3f' % (r+1, score))
         scores.append(score)
